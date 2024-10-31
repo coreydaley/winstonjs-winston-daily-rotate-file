@@ -35,17 +35,47 @@ const DailyRotateFile = function(options) {
         });
     }
 
-    function getMaxSize(size) {
-        if (size && typeof size === "string") {
-            if (size.toLowerCase().match(/^((?:0\.)?\d+)([kmg])$/)) {
-                return size;
-            }
-        } else if (size && Number.isInteger(size)) {
-            const sizeK = Math.round(size / 1024);
-            return sizeK === 0 ? "1k" : sizeK + "k";
+    function normalizeMaxSize(size) {
+        // If size is already an integer of bytes
+        if (Number.isInteger(size)) {
+            // Then make sure it is not zero (0) and return it with the correct formatting
+            return size === 0 ? "1k" : size / 1024 + "k"
         }
-
-        return null;
+        // If size has any invalid characters get rid of them
+        size = size.replace(/[^0-9a-z]/g, "");
+        // If size is a string
+        if (typeof size === "string") {
+            // Separate the integer and the string parts
+            let integerPart = parseInt(size);
+            let stringPart = size.replace(/[0-9]/g, "");
+            
+            // If the string part has a length of one (1) and matches the regexp
+            if (stringPart.length === 1 && stringPart.match(/[kmg]/)) {
+                // Combine the integer part and the string part and return it
+                return integerPart + stringPart;
+            }
+            
+            // If the string part has a long quantifier (> 1) parse it and assign the short quantifier
+            switch(true) {
+            case /kilobytes|kilobits|kb/.test(stringPart):
+                stringPart = "k";
+                break;
+            case /megabytes|megabits|mb/.test(stringPart):
+                stringPart = "m";
+                break;
+            case /gigabytes|gigabits|gb/.test(stringPart):
+                stringPart = "g";
+                break;
+            default:
+                // If none of the long quantifiers match throw an error and let the user know
+                throw new Error("Unable to determine size quantifier from string: " + stringPart);
+            }
+            
+            // If everything went well we can combine the integer part and the string part and return it
+            return integerPart + stringPart;
+        }
+        // If we get here, something is wrong and we should let the user know
+        throw new Error("Unable to parse option maxSize, invalid format: " + size);
     }
 
     function isValidFileName(filename) {
@@ -83,7 +113,7 @@ const DailyRotateFile = function(options) {
             frequency: options.frequency ? options.frequency : "custom",
             date_format: options.datePattern ? options.datePattern : "YYYY-MM-DD",
             verbose: false,
-            size: getMaxSize(options.maxSize),
+            size: options.maxSize ? normalizeMaxSize(options.maxSize) : null,
             max_logs: options.maxFiles,
             end_stream: true,
             audit_file: options.auditFile
